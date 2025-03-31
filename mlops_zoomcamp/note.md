@@ -25,6 +25,11 @@ General 3 stages of Machine Learning Project
 - [4.2 Web-services: Deploying models with Flask and Docker](#42-web-services-deploying-models-with-flask-and-docker)
 - [4.3 Web-services: Getting the models from the model registry (MLflow)](#43-web-services-getting-the-models-from-the-model-registry-mlflow)
 - [4.4 Streaming: Deploying models with Kinesis and Lambda](#44-streaming-deploying-models-with-kinesis-and-lambda)
+- [4.5 Batch Preparing a scoring script](#45-batch-prepaing-a-scoring-script)
+- [5.1 Intro to ML Monitoring](#51-intro-to-ml-monitoring)
+- [5.2 Environment Setup](#52-environment-setup)
+- [5.3 Prepare reference and model](#53-prepare-reference-and-model)
+- [5.4 Evedently metrics calculation](#54-evedently-metrics-calculation)
 
 ## 1.2 Environment Preparation
 
@@ -537,7 +542,7 @@ For each run:
 
 ## 3.0.1 Machine Learning Pipeline
 *A.K.A. Workflow Orchestration*
-- A Sequence of steps to reproduce something (and for ML pipeline, of courc, reproducing an ML model)
+- A Sequence of steps to reproduce something (and for ML pipeline, reproducing an ML model)
 - There're multiple tools can be mentioned here, some could be for general purpose, and some could be more specific to ML Pipeline.
     - More General
         - Airflow
@@ -662,7 +667,7 @@ TBD
 
     COPY [ "Pipfile", "Pipfile.lock", "./" ]
 
-    RUN pipenv install --system --deploy
+    RUN pipenv install --system --deploy # --system to install directly to docker host, no need to isolate another python virtual environment within a container
 
     COPY [ "predict.py", "lin_reg.bin", "./" ]
 
@@ -676,12 +681,15 @@ TBD
         - [Material: chapter-09-kubernetes](https://github.com/alexeygrigorev/mlbookcamp-code/tree/master/chapter-09-kubernetes)
 
 ## 4.3 Web-services: Getting the models from the model registry (MLflow)
+
 In the video, Alexey initialized MLflow server on a remote machine (EC2), and using s3 for artifact store and sqlite as a backend database.
 ```bash
 mlflow server --backend-store-uri=sqlite://mlflow.db --default-artifact-root=s3://artifact-bucket/subpath
 ``` 
+
 ### Using Tracking server as a model registry
-- In the notebook, DS might log the developed model and upload to the artifact bucket. And what we're gonna do is to retrieve the model from the model registry (artifact bucket), not directly loading from local machine.
+
+- In the notebook, DS might log the developed model and upload to the artifact bucket. And what we're gonna do is to retrieve the model from the model registry (the artifact bucket), instead of directly loading from local machine.
 ```python
 # import pickle
 # with open("lin_reg.bin", "rb") as f_in:
@@ -741,7 +749,7 @@ with mlflow.start_run():
 ```
 
 ### Using data lake as a model registry
-- Suppose, something could happen with the tracking server and cause it unavailable, we may not need our prediction service getting down also. So, we could use data lake as a model registry
+- Suppose, something could happen with the tracking server and cause it unavailable, we may not need our prediction service to get down too. So, we could use data lake as a model registry to fetch models from.
 ```python
 # In MLflow UI model serving has full path of data lake storing model and artifact 
 
@@ -757,4 +765,214 @@ model = mlflow.pyfunc.load_model(logged_model)
 ```
 
 ## 4.4 Streaming: Deploying models with Kinesis and Lambda
+
+In this module, Alexey showed how to use AWS Lambda with Amazon Kinesis which required some role and permission, managaed in IAM, to run ML code on Lambda.
+
+- Lambda allow us to run pieces of code in severless approach allowing us to less concerned with infrastructure management.
+
+- Example Code on Lambda:
+```python
+import os
+import json
+import base64 # to decode message
+import boto3
+
+import mlflow
+
+# use kinesis api to send each stream record to another stream event
+kinesis_client = boto3.client("kinesis", region="ap-southeast-1")
+
+def prepare_feature(input: dict) -> dict:
+    preprocessed_features = {}
+    return preprocessed_features
+
+def predict(features: dict) -> float:
+    # import model
+    RUN_ID = os.getenv("MLFLOW_RUN_ID")
+    logged_model = f"s3://bucket-name/1/{RUN_ID}/artifacts/model"
+    model = mlflow.pyfunc.load_model(logged_model)
+    
+    # predict as float, unless error raised with JSON serialization issue, then return
+    return float(model.predict(features))
+
+def lambda_handler(event, context): # context is required in default config, but we don't have to worry about it. (can be provided as None when sending to this stream)
+
+    # print(json.dumps(event)) # this will be used to observe payload event from Kinesis
+    # return { # This is used for first test lambda
+    #     "statusCode": 200,
+    #     "body": json.dumps("Hello from Lambda!")
+    # }
+
+    # since event stream send event as list, we need loop and list
+    predictions = []
+
+    for record in event["Records"]:
+        request_id = record["kinesis"]["id"] # get attribute according to payload
+        raw_features = record["kinesis"]["data"] # event data might be encodedd with base64, required base64 or utf-8 decoding
+        input_features = json.loads(raw_features)
+
+        features = prepare_feature(input=input_features)
+        prediction = predict(features)
+
+        prediction_event = {
+            "model": "some_model_name",
+            "version": "123",
+            "prediction": {
+                "output_prediction": prediction,
+                "id": request_id
+            }
+        }
+        
+        # sending to another stream
+        kinesis_client.put_record(
+            StreamName=os.getenv("STREAM_NAME", "default_value"),
+            Data=json.dumps(prediction_event),
+            PartitionKey=str(request_id),
+        )
+
+        predictions.append(prediction_event)
+
+    return {"predictions": predictions} # this format in order to send to another stream or consumer
+```
+
+- Example of Kinesis
+    - Configure every options in AWS Console Kinesis and create Data Stream
+    - Use Kinesis as Triggerer in Lambda Service
+    - Don't forget to attach permissions for Kinesis
+    - Sending Data:
+    ```bash
+    aws kinesis put-record \
+        --stream-name <stream-name> \
+        --partition-key <ride-id> \
+        --data '{
+            "ride": {
+                "input_feature_1": 130,
+                "input_feature_2": 205,
+                "input_feature_3": 3.66
+            },
+            "record_id": 156
+        }'
+    ```
+    - Lambda now could read data from the stream (check logs)
+    - Additionally, we could make use of shards to optimize the process if we have multiple shards for the stream
+
+- Dockerfile
+    - Another way to deploy code on Lambda is to use docker image and use *Container image* option to deploy Lambda function.
+    - We might need additional dockerfile to achieve this, some of dependencies management, and ECR for image registry.
+    - We have to concern how to authenticate the container with the services by exporting credentials as environment variable or attaching role to resoruces.
+
+Conclusion
+- We've learn deploy ML as a Lambda and let it consume input from stream event with Kinesis
+- How Lambda works, How kinesis works
+- How to put the model in the lambda
+- How to put everything into docker and deploy it
+
+## 4.5 Batch: Prepaing a scoring script
+
+*Deploying model in offline mode (Batch)*
+
+In this topic, Alexey demonstrate how to turn ML code from Jupyter Notebook to a clean py script which involve the following aspects:
+- Extract only necessary transformation logic code
+- Make it functional form (or OOP)
+- Prepare I/O (Input Reader and Output Writer)
+- Parameterize code
+- Define input argument (should use `argparse`)
+- Use Logging to indicate progress during execution
+
+## 5.1 Intro to ML Monitoring
+
+Most of time after deploying the ML to production stage, model performance will likely to degrade over time that might due to data drift, data outage, schema changes, concept drift, and etc. So, monitoring is the process to allow us to identify this kind of situation.
+
+What should be monitoring are:
+- Service health
+- Model Performance
+- Data quality and integrity
+- Data and concept drift
+
+Optionally, we should monitoring these too:
+- Performance by segment
+- Model bias and fairness
+- Outliers
+- Explainability
+
+### Batch vs Online Serving Models
+- How to monitor?
+    - Additionall ddd ML metrics to service health monitoring tools e.g. Prometheus/Grafana
+    - Build and ML-focused Dashboard(s) e.g. MongoDB/Grafana or BI Tools such as Tableau, Looker
+- Example with Data Quality
+    - Batch Models: Based on training data or past batch
+        - Expected data quality e.g. 80% is non-constant and null
+        - Data distribution e.g. normality
+        - Descriptive Statistics e.g. avg, median, min-max, quantiles for individual feature
+    - Non-batch Models
+        - Calculate metrics continuously or even incrementally
+        - Statistical test on a continuous data stream e.g. using window function and compare windows
+- Monitoring Scheme
+    - Software Service: request-response
+    - I/O Logging: prediction logs
+    - Monitoring Jobs: reference data vs ground truth
+    - ML Evaluation Store: storing metrics with PostgresDB
+    - Dashboard: Grafana to access stored metrics
+
+## 5.2 Environment Setup
+
+The topic is about configuring docker compose to set up environment for ML Monitoring using grafana
+
+- docker-compose.yml
+    ```yaml
+    version: '3.7' # docker compose version
+
+    networks:
+        network-1:
+        network-2:
+
+    services:
+        db:
+            ...
+            environment:
+                POSTGRES_PASSWORD: password_example_1
+            ports: 5432:5432
+            networks:
+                - network-1
+        adminer:
+            ...
+        grafana:
+            image: grafana/grafana
+            user: "472"
+            ports:
+                - 3000:3000
+            volume:
+                - ./config/grafana_datasource.yaml:/etc/grafana/provisioning/datasources/datasource.yaml:ro
+            networks:
+                - network-1
+                - network-2
+            restart: always
+    ```
+- grafana config file: `grafana_datasource.yaml`
+    ```yaml
+    apiVersion: 1 # version of config file
+
+    # list of datasources to insert/update
+    # available in the database
+    datasources:
+        - name: PostgreSQL
+        type: postgres
+        access: proxy
+        url: db.:5432
+        database: test
+        user: postgres
+        secureJsonData:
+            password: "password_example_1"
+        jsonData:
+            sslmode: "disable"
+    ```
+
+Run `docker compose up --build`, then access grafana UI via Web URL `http://localhost:3000`. Try to use default user in Grafana UI (admin-admin) and create new password.
+
+## 5.3 Prepare reference and model
+
+This chapter, instructor demonstate how to pre-processing data and create some simple model to predict result.
+
+## 5.4 Evedently metrics calculation
+
 *In-progress . . .*

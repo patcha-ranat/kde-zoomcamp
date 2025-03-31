@@ -1,10 +1,16 @@
-# Learning Materials for Data Engineering Zoomcamp
+# Lecture Note for Zoomcamp
 
-[***DataTalksClub** - data-engineering-zoomcamp*](https://github.com/DataTalksClub/data-engineering-zoomcamp)
+*patcharanat p.*
 
-## Topics
+## Table of Contents
+1. [Lecture DE Zoomcamp](#1lecture-de-zoomcamp)
+2. [Lecture MLOps Zoomcamp](#2-lecture-mlops-zoomcamp)
+
+## 1.Lecture DE Zoomcamp
+
+### Topics
 - Week 1: Basics and setup ***(Done)***
-    - [Note for Week 1 **(Highly Recommended)**](./docs/note_week1.md)
+    - [Note for Week 1](./docs/note_week1.md)
     - Learn basic docker and docker compose
     - Learn basic Terraform
     - Setup a VM on the Google Cloud Platform
@@ -36,3 +42,7 @@
     - Additional Refernce:
         - [Kafka-Python explained in 10 lines of code](https://towardsdatascience.com/kafka-python-explained-in-10-lines-of-code-800e3e07dad1)
         - [Apache Kafka ฉบับผู้เริ่มต้น #1: Hello Apache Kafka](https://medium.com/linedevth/apache-kafka-%E0%B8%89%E0%B8%9A%E0%B8%B1%E0%B8%9A%E0%B8%9C%E0%B8%B9%E0%B9%89%E0%B9%80%E0%B8%A3%E0%B8%B4%E0%B9%88%E0%B8%A1%E0%B8%95%E0%B9%89%E0%B8%99-1-hello-apache-kafka-242788d4f3c6)
+
+## 2. Lecture MLOps Zoomcamp
+
+[All Modules Lecture Note - mlops_zoomcamp/note.md](./mlops_zoomcamp/note.md)
