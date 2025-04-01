@@ -30,6 +30,9 @@ General 3 stages of Machine Learning Project
 - [5.2 Environment Setup](#52-environment-setup)
 - [5.3 Prepare reference and model](#53-prepare-reference-and-model)
 - [5.4 Evedently metrics calculation](#54-evedently-metrics-calculation)
+- [5.5 Evidently Monitoring Dashboard](#55-evidently-monitoring-dashboard)
+- [5.6 Dummy Monitoring](#56-dummy-monitoring)
+- [5.7 Data Quality Monitoring](#57-data-quality-monitoring)
 
 ## 1.2 Environment Preparation
 
@@ -974,5 +977,94 @@ Run `docker compose up --build`, then access grafana UI via Web URL `http://loca
 This chapter, instructor demonstate how to pre-processing data and create some simple model to predict result.
 
 ## 5.4 Evedently metrics calculation
+
+This topic demonstate how to use eveidently to calculate different metrics related different aspects of machine learning pipeline by providing right argument for eveidently library. Then, it will visualize and give metrics that we specified that we need such as drift score, column drift, missing values, and etc.
+
+- Example of evidently library usage
+```python
+from evidently import ColumnMapping
+from evidently.report import Report
+from evidently.metrics import ColumnDriftMetric, DatsetDriftMetric, DatasetMissingValueMetric
+
+
+column_mapping = ColumnMapping(
+    target=None,
+    prediction="prediction",
+    numerical_feature=num_features,
+    categorical_features=cat_features
+)
+
+report = Report(
+    metrics=[
+        ColumnDriftMetric(column_name="prediction"),
+        DatasetDriftMetric(),
+        DatasetMissingValuesMetric()
+    ]
+)
+
+report.run(reference_date=train_data, current_data=val_data, column_mapping=column_mapping)
+
+report.show(mode="inline")
+
+result = report.as_dict() # observe result dict for metrics
+```
+
+## 5.5 Evidently Monitoring Dashboard
+
+The topic, instructor showed how to create evidently monitoring dashboard which suit for batch model and the company that don't have monitoring infrastructure yet.
+
+- Example
+
+```python
+from evidently.report import Report
+from evidently.ui.workspace import Workspace
+
+
+regular_report = Report(...)
+
+ws = Workspace("workspace")
+
+# project = ws.create_project("project name")
+# project.description = "desc"
+# project.save()
+
+ws.add_report(project.id, regular_report)
+
+# etc.
+```
+
+```bash
+evidently ui
+# then go to local host with shown port
+```
+
+## 5.6 Dummy Monitoring
+
+This chapter, the instructor demonstrate how grafana work with postgres in practice. If we configure Grafana correctly, we can use Grafana to aggregate data in postgresDB and show as interactive dashboard on Grafana Web UI.
+
+## 5.7 Data Quality Monitoring
+
+This chapter, the instructor demonstrate how to integrate data quality metrics from eveidently to grafana dashboard which involve around inserting metrics to postgres database and use it to show on dashboard.
+
+## 5.8 Save Grafana Dashboard
+
+We can save developed Grafana Dashboard by storing configuration in a JSON file. Go to dashboard and try to find `Dashboard Settings` and save JSON Model section to a file. Mount that file to specific grafana's directory.
+
+```yaml
+services:
+    grafana:
+        ...
+        volumes:
+            - ./config/grafana_datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro
+            - ./config/grafana_dashboard.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+            - ./dashboards:/opt/grafana/dashboards
+```
+
+## 5.9 Debugging with test suites and reports
+
+
+
+
+
 
 *In-progress . . .*
