@@ -33,6 +33,9 @@ General 3 stages of Machine Learning Project
 - [5.5 Evidently Monitoring Dashboard](#55-evidently-monitoring-dashboard)
 - [5.6 Dummy Monitoring](#56-dummy-monitoring)
 - [5.7 Data Quality Monitoring](#57-data-quality-monitoring)
+- [6. Best Practices](#6-best-practices)
+- [6.1 Testing Python code with pytest](#61-testing-python-code-with-pytest)
+- [6.2 Integration tests with docker-compose](#62-integration-tests-with-docker-compose)
 
 ## 1.2 Environment Preparation
 
@@ -1062,8 +1065,121 @@ services:
 
 ## 5.9 Debugging with test suites and reports
 
+The instructor demonstrate in this chapter of how we can utilize pre-built tests from evidently and integrated with machine learning pipeline, so we don't have to implement everything ourselves from scratch. Mostly the metrics is drift score and drifted columns related. These capabilities allow us to detect what's going on with our data, and we can then debug after being noticed. 
+
+## 6. Best Practices
+
+- Testing the code: unit test with pytest
+- Integration test with LocalStack and Docker-Compose
+- Code quality: linting, formatting, and pre-commit hooks
+- Makefiles
+- Development, staging and production environments (Theory)
+- Infrastructure-as-code with Terraform and AWS (Implementing the environments)
+    - Explanation of why we need to split across multiple environments
+    - Demo: Terraform for Kinesis & Lambda, across multiple environments (staging and production)
+- Automating deployments with CI/CD pipeline through GitHub Action
+    - automatic deployment to staging and manual deployment with a click to prod env
+
+## 6.1 Testing Python code with pytest
+
+This chapter, Alexey showed how to setup `pipenv` on SSH, how to use pytest to test against all parts of kinesis and lambda code from chapter [4.4](#44-streaming-deploying-models-with-kinesis-and-lambda), and refactoring the code from the functional form to OOP to make it able to be tested.
+
+And in the last part of the video, Alexey said that there's some function that we might don't want it to be executed during unit testing like putting record to message queue, so we have to adjust code a bit more to make it unavailable when unit testing is run.
+
+### Pipenv
+
+- `pipenv` is another python library that can be installed via `pip`. It solve dependency management issues by replacing traditional approach like python `virtualenv` or `requirements.txt` with `pipenv`.
+- `pipenv` allow you to isolate your python environment for a python project, specify python version that you want, separate dependencies between environments (by `--dev`), and make you less concern about pinning all sub-dependencies by using `Pipfile` and `Pipfile.lock`.
+- When an exact version isn’t specified in the Pipfile, the `pipenv` install command gives the opportunity for dependencies (and sub-dependencies) to update their versions to keep your dependencies up-to-date as most as possible.
+- In order to distribute your python code as a package, you still need some additional tool like `setuptools`, `pyproject.toml`, or `wheel` to do so.
+- Additionally, `pipenv` can leverage `.env` file at top-level of a repository to use in an isolated virtual environment opened by `pipenv shell`.
+
+```bash
+# install pipenv by pip
+pip install pipenv
+```
+
+```bash
+# enable pipenv
+pipenv shell
+
+# check which python is used
+which python
+pipenv --venv
+pipenv --where
+```
+- Above command will automatically detect the current running virtual environment, and detect existing `requirement.txt` file to create `Pipefile` for the first time.
+
+```bash
+# Using [packages]
+pipenv install
+# pipenv install -r requirements.txt
 
 
+# Using [packages] and [dev-packages]
+pipenv install --dev
+# pipenv install -r dev-requirements.txt --dev
+
+# Remove dev dependencies
+pipenv uninstall --all-dev
+# pipenv uninstall --all
+
+# Create/Update Pipfile.lock
+pipenv lock
+
+# Using Pipfile.lock
+pipenv install --ignore-pipfile
+```
+- Typically, we shouldn't manually edit `Pipefile.lock` ourselves.
+- Workflow should be something like below:
+```bash
+pipenv shell
+
+# check if new added dependency compatible with the existing
+pipenv install
+
+pipenv lock
+
+# usage in CI pipeline
+pipenv install --dev
+
+# usage in production
+pipenv install --ignore-pipfile
+```
+
+*Remark: Don't forget that we can use environment variables that's specified in `.env` file at top level of the project in the isolated `pipenv` virtual environment*
+
+Reference
+
+- [Pipenv: A Guide to the New Python Packaging Tool](https://realpython.com/pipenv-guide/)
+
+### Pytest
+
+```
+project_root
+|
+|-- tests
+|   |-- __init__.py
+|   |-- test_script.py
+...
+```
+
+`test_script.py` should import the developed function that's gonna be used in production environment, then we can define `test_input` and `expected_output` within a function: `test_<function_name>` for `<function_name>` function.
+
+```python
+from custom.function.within.repo import multiply
+
+
+def test_multiply():
+    input = {...}
+    expected_output = {...}
+
+    output = multiply(input)
+
+    assert output == expected_output
+```
+
+## 6.2 Integration tests with docker-compose
 
 
 
