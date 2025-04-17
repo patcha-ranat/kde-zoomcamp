@@ -35,7 +35,12 @@ General 3 stages of Machine Learning Project
 - [5.7 Data Quality Monitoring](#57-data-quality-monitoring)
 - [6. Best Practices](#6-best-practices)
 - [6.1 Testing Python code with pytest](#61-testing-python-code-with-pytest)
+    - [Pipenv](#pipenv)
+    - [Pytest](#pytest)
 - [6.2 Integration tests with docker-compose](#62-integration-tests-with-docker-compose)
+- [6.3 Testing Cloud Services with LocalStack](#63-testing-cloud-services-with-localstack)
+- [6.4 Code Quality: linting and formatting](#64-code-quality-linting-and-formatting)
+    - [pyproject.toml](#pyprojecttoml)
 
 ## 1.2 Environment Preparation
 
@@ -1145,6 +1150,8 @@ pipenv install --dev
 
 # usage in production
 pipenv install --ignore-pipfile
+
+pipenv run python <script-name>.py
 ```
 
 *Remark: Don't forget that we can use environment variables that's specified in `.env` file at top level of the project in the isolated `pipenv` virtual environment*
@@ -1181,6 +1188,439 @@ def test_multiply():
 
 ## 6.2 Integration tests with docker-compose
 
+In this chapter, Alexey introduced how we can execute integration test to make sure if our code would operate correctly with other services. First, we need to pack our code with Docker to make it be able to be tested and deployed.
 
+Alexey mostly showed how to refactor the code, and how it can be execute with docker commands.
+
+## 6.3 Testing Cloud Services with LocalStack
+
+This chapter Alexey demonstrated how we can simulate another service locally that our main code would interact with. For example, Alexey used `localstack/localstack` image with docker compose to spin up another service acted as Local Kinesis Service to enable integration test for main code and Kinesis in local machine.
+
+Sometimes, we have to add/remove/refactor some part of code to make it able to be tested.
+
+```yaml
+services:
+    backend:
+        image: ${GET_FROM_INPUT_COMMAND}
+        ports:
+            - 8080:8080
+        environment:
+            SOME_VARIABLE_USED_IN_CODE_1: XXX
+            SOME_VARIABLE_USED_IN_CODE_2: YYY
+            SOME_VARIABLE_USED_IN_CODE_3: ZZZ
+        volumes:
+            - ./path/to/code:/app/
+    kinesis:
+        image: localstack/localstack
+        ports:
+            - 4566:4566
+        environment:
+            SERVICES: kinesis
+```
+
+```bash
+# list streams in aws account
+aws kinesis list-streams
+
+# list streams in localstack
+aws --endpoint-url=http://localhost:4566 kinesis list-streams
+
+aws --endpoint-url=http://localhost:4566 kinesis create-stream \
+    --stream-name <stream_name> \
+    --shard-count 1
+```
+
+What is worth noting is that, Alexey mentioned that we can use `http://kinesis:4566/` to refer to `kinesis` service name which must be in the same network. If we have a service that's not in the same network, we need to connect via `localhost` instead of the specific service name. 
+
+```bash
+# running unit test
+pipenv run pytest <directory_name>/
+
+# running integration test
+./integration_test/run.sh
+```
+
+```shell
+# ./integration_test/run.sh
+
+# Add shebang at the top
+#!/usr/bin/env bash
+
+# Start Testing Stack
+docker compose up -d
+
+sleep 5
+
+aws --endpoint-url=http://localhost:4566 \
+    kinesis create-stream \
+    --stream-name ${STREAM_NAME} \
+    --shard-count 1
+
+# Run Test against testing Stack
+pipenv run python test_docker.py
+
+# Get Error code if exists
+ERROR_CODE=$?
+
+if [ ${ERROR_CODE} != 0 ]; then
+    docker compose logs
+    docker compose down
+    exit ${ERROR_CODE}
+fi
+
+# Run another test
+pipenv run python test_kinesis.py
+
+ERROR_CODE=$?
+
+if [ ${ERROR_CODE} != 0 ]; then
+    docker compose logs
+    docker compose down
+    exit ${ERROR_CODE}
+fi
+
+docker compose down
+```
+
+## 6.4 Code Quality: linting and formatting
+
+Alexey introduced PEP8 which is a python community standard of how python should look like (Style and Guide for Python code) to improve code readibility and then considered it as a quality of code.
+
+He also introduce one of many popular python linter tools: `pylint` to enable linting. Pylint do not only check the style of the code, but also check common mistakes written in the code that should be concerned.
+
+```bash
+pipenv install pylint --dev
+
+pipenv run pylint <file_name>.py
+
+# pipenv shell
+# pylint --recursive=y .
+```
+
+However, it's possible to bypass some of linting rules for some reasons. We can use the below example to avoid linting checks for specific rule.
+
+```python
+class ClassName:
+
+    # pylint: disable=too-few-public-methods
+    
+    def __init__(self):
+        pass
+
+    def some_function(self, unused_variable):
+        # pylint: disable=unused-argument
+        pass
+```
+
+Most of linter, we can customize its congiuration that's available such as `.pylintrc`, `ruff.toml` and etc.
+
+There's some alternative including pylint can use different configuration file such as `pyproject.toml` so we don't have to have many different of configuration files in a project.
+
+Example of `pyproject.toml`:
+```toml
+[tool.pylint.messages_control]
+
+disable = [
+    "missing-function-docstring",
+    "missing-final-newline",
+    "missing-class-docstring",
+    "invalid-name"
+]
+```
+
+### Pyproject.toml
+
+*This tools is not directly introduced in the lesson, but somehow presented as a additional python project configuration file. However, I saw this configuration file quite often in many projects. So, I think it would be great to do some research on this an also considered this as good-to-know topic.*
+
+`pyproject.toml` simplifies python project configuration written in `TOML` syntax and can be used with many other python ecosystem related tools for advanced usages.
+
+`pyproject.toml` can help in the ***module search path*** relating to how you can import your developed program or code within a project regarding where you execute.
+- When you execute python as a module; `python -m <directory>`, it will search for `__main__.py` in that `<directory>` and make all the script inside it able to be imported that relative to **the module directory**.
+- `-m` flag add the script location to the module search path to make importing become consistent across the project.
+
+*Note: Don't set `PYTHONPATH` manually, it can cause so much trouble. but the mentioned variable also relate to these kind of things*
+
+```
+snakesay-project/    ← The project root
+│
+├── snakesay/        ← The main module of this project
+│   ├── __init__.py
+│   ├── __main__.py  ← The entry point to snakesay
+│   └── snake.py     ← The core of the program
+│
+├── .gitignore
+├── LICENSE
+├── pyproject.toml   ← What this tutorial is about
+└── README.md
+```
+
+```python
+# Example: __main__.py
+import sys
+from snakesay import snake
+
+def main():
+    snake.say(" ".join(sys.argv[1:]))
+
+if __name__ == "__main__":
+    main()
+```
+
+```bash
+# Executed as a module
+python -m snakesay <script-arguments> # This will work
+
+# Executed as a script
+python snakesay/__main__.py <script-argument> # This will not work due to importing failed
+# Traceback (most recent call last):
+#   ...
+#   snakesay-project/snakesay/__main__.py", line 2, in <module>
+#     from snakesay import snake
+# ModuleNotFoundError: No module named 'snakesay'
+```
+
+By the way, `pyproject.toml` does not provide virtual environment. so we have to use some additional tools for this such as `venv`, `pipenv`, etc.
+
+A minimal `pyproject.toml` configuration file could look like this:
+
+```toml
+[build-system]
+requires = ["setuptools>=75.3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snakesay"
+version = "1.0.0"
+
+[project.scripts]
+ssay = "snakesay.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+```
+
+- It require `setuptools` for installation.
+- [tool.setuptools.packages.find] table tells your build-system, Setuptools, where to find packages in your project. In this case, it’s just the root directory. It can be useful when Setuptools can't find module in the project root directory.
+
+Installing project setup from `pyproject.toml` to *virtualenv*:
+
+```bash
+$ (venv) python -m pip install -e .
+```
+
+- `-e` flag specify *editable*, making our changes in module can be used in real-time without re-installing
+- However, if changes occur on `pyproject.toml` itself, we'll need to reinstall the packages.
+- output file: `.egg-info` is metadata that should be hidden from version control.
+
+We can also configure `pyproject.toml` to make our module become executable with alias such as:
+
+```bash
+ssay "<module-arguments>"
+```
+
+By modifying `pyproject.toml`
+
+```toml
+...
+
+[project.scripts]
+ssay = "snakesay.__main__:main"
+# <module-alias> = "<module-name>.<main-script-name>:<entrypoint-function-name>"
+
+...
+```
+
+- Please note that entrypoint function must not require any argument.
+
+Futhermore, We can manage/pin dependencies for a module in `pyproject.toml` separately between multiple scenarios. Hence, we can replace `requirements.txt` and `requirements-dev.txt` with this approach.
+
+```toml
+...
+
+[project]
+name = "snakesay"
+version = "1.0.0"
+dependencies = ["rich"]
+
+[project.optional-dependencies]
+dev = ["black>=24.1.0", "isort"] # latest isort
+
+...
+```
+
+*Note: `dev` is arbitrary name, it can also be some other name.*
+
+For installing `dependencies` including `dev`:
+
+```bash
+python -m pip install -e ".[dev]"
+```
+
+However, we still can use `requirements.txt` if preferred:
+
+```toml
+...
+
+[project]
+name = "snakesay"
+version = "1.0.0"
+dynamic = ["dependencies", "optional-dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = { file = ["requirements.txt"] }
+optional-dependencies.dev = { file = ["requirements-dev.txt"] }
+
+...
+```
+
+Additionally, we can specify `__version__` variable in `__init__.py` to make package distribution version become dynamic, so we don't have to hardcode it in `pyproject.toml`.
+
+```toml
+...
+
+[project]
+name = "snakesay"
+# version = "1.0.0"
+dynamic = ["version"]
+
+[tool.setuptools.dynamic]
+version = {attr = "snakesay.__version__"}
+...
+```
+
+In the `__init__.py` script
+```python
+"""A CLI program that echoes a string with a bit of ASCII art."""
+
+__version__ = "1.0.0"
+```
+
+*Note: notice that `dynamic` variable in `[project]` table in `pyproject.toml` refer to variable name within `pyproject.toml` that we can assign at runtime*
+
+Moreover, some tools can leverage `pyproject.toml` to configure its usage. For example:
+
+```toml
+...
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+
+...
+```
+
+Anyway, We still need some other tools to efficiently use `pyproject.toml` with such as `Poetry` and some other tools for distributing the module as a package with `build`, `twine`, `wheel` which are not covered in this topic.
+
+For example of `pyproject.toml` for distribution capability:
+```toml
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snakesay"
+version = "1.0.0"
+dependencies = ["rich"]
+authors = [{name = "Jin Doe", email = "jindoe@example.com"}]
+keywords = ["CLI", "ASCII Art"]
+license = "MIT"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+
+[project.optional-dependencies]
+dev = ["black", "isort", "build", "twine"]
+
+[project.scripts]
+ssay = "snakesay.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+```
+
+*Note: we can also use `Private :: Do Not Upload` to prevent package from being uploaded.*
+
+Example of how we can upload a package:
+```bash
+python -m build
+# * Creating isolated environment: venv+pip...
+# ...
+# Successfully built snakesay-1.0.0.tar.gz and snakesay-1.0.0-py3-none-any.whl
+
+# OR
+python -m twine upload dist/*
+# This command will upload all the distributions in the dist directory to PyPI
+```
+
+Here is full example of `pyproject.toml` could look like:
+
+```toml
+[build-system]
+requires = ["setuptools>=75.3.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snakesay"
+dependencies = ["rich>=13.9.0"]
+authors = [{name = "Jin Doe", email = "jindoe@example.com"}]
+keywords = ["CLI", "ASCII Art"]
+readme = {file = "README.md", content-type = "text/markdown"}
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/me/spam.git"
+Issues = "https://github.com/me/spam/issues"
+
+[project.optional-dependencies]
+dev = ["black>=24.1.0", "isort>=5.13.0", "build", "twine"]
+
+[project.scripts]
+ssay = "snakesay.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.setuptools.dynamic]
+version = {attr = "snakesay.__version__"}
+
+[tool.black]
+line-length = 88
+
+[tool.isort]
+profile = "black"
+```
+
+| Tool | Manages dependencies | Virtualenv | Build metadata | Standard |
+|:----:|:--------------------:|:----------:|:--------------:|:--------:|
+pipenv | ✅ | ✅ | ❌ | ❌
+pyproject.toml | ✅ (via tools like poetry) | ❌ (external) | ✅ | ✅ (PEP 518+)
+
+Reference
+
+- [How to Manage Python Projects With pyproject.toml](https://realpython.com/python-pyproject-toml/)
 
 *In-progress . . .*
