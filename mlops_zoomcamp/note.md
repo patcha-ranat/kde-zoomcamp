@@ -41,6 +41,10 @@ General 3 stages of Machine Learning Project
 - [6.3 Testing Cloud Services with LocalStack](#63-testing-cloud-services-with-localstack)
 - [6.4 Code Quality: linting and formatting](#64-code-quality-linting-and-formatting)
     - [pyproject.toml](#pyprojecttoml)
+- [6.5 Git pre-commit hooks](#65-git-pre-commit-hooks)
+- [6.6 Makefile and make](#66-makefile-and-make)
+- [6b.1 Terraform Introduction](#6b1-terraform-introduction)
+- [6b.2 Terraform Modules and Outputs Variables](#6b2-terraform-modules-and-outputs-variables)
 
 ## 1.2 Environment Preparation
 
@@ -1328,6 +1332,25 @@ disable = [
 ]
 ```
 
+There's also some other tools that are responsible for formatting, such as `black`, `isort`, etc. Formatter will try to change the content of the file to comply with convention/standards without changing how it work (refactoring, not optimizing). We also need these dependencies to be installed in development environment in order to use it.
+
+All the commands are pretty simple and pre-built by the framework. You can find it easy to use by reading the official documentation.
+
+Usage Example:
+
+```bash
+black -diff .
+
+black ./path/to/script.py
+
+isort --diff .
+
+isort .
+black .
+pylint --recursive=y .
+pytest tests/
+```
+
 ### Pyproject.toml
 
 *This tools is not directly introduced in the lesson, but somehow presented as a additional python project configuration file. However, I saw this configuration file quite often in many projects. So, I think it would be great to do some research on this an also considered this as good-to-know topic.*
@@ -1622,5 +1645,83 @@ pyproject.toml | ✅ (via tools like poetry) | ❌ (external) | ✅ | ✅ (PEP 5
 Reference
 
 - [How to Manage Python Projects With pyproject.toml](https://realpython.com/python-pyproject-toml/)
+
+## 6.5 Git pre-commit hooks
+
+The pre-commit hook is run first, before you even type in a commit message in order to regulate some restrictions to the code. We also need to install it first before usage.
+
+```bash
+pipenv install --dev pre-commit
+
+pre-commit install
+
+# .pre-commit-config.yaml
+```
+
+We can check the capability of pre-commit hook, like what it can do and cannot by observing available features in pre-commit hook library. There're some interesting hooks to mention such as `check-yaml`, `detect-private-key`, etc.
+
+*Note: we need `.git` folder and its contents to enable pre-commit hook*
+
+## 6.6 Makefile and make
+
+```bash
+# for Windows
+choco install make
+
+# don't forget to restart vscode to make it available after installation
+```
+
+With Makefile and `make` operation, we can execute a set of bash operations as alias make command.
+
+```makefile
+.SILENT: test lint test integration-test start stop build publish
+
+IMAGE_TAG:=$(shell date + "%Y%m-%d %H-%M-%S")
+
+LOCAL_IMAGE_NAME:=some-image-name:${IMAGE_TAG}
+LOCAL_IMAGE_NAME="image-name-on-repo:${IMAGE_TAG}"
+
+lint:
+    isort .
+    black .
+    pylint --recursive=y .
+
+test:
+    pytest . PYTHONPATH=tests/
+
+integration-test:
+    bash ./integration_test.sh
+
+start:
+    docker compose -f ./docker/Dockerfile up --build
+
+stop:
+    docker compose -f ./docker/Dockerfile up down --rm
+
+build: test integration-test
+    echo "Building Image: ${LOCAL_IMAGE_NAME}"
+    docker build -t ${LOCAL_IMAGE_NAME} .
+
+publish: build
+    docker tag ${LOCAL_IMAGE_NAME} ${REPO_NAME}
+    docker push
+
+```
+
+```bash
+make lint
+
+make build
+```
+
+## 6b.1 Terraform Introduction
+
+This chapter, instructor describe in overview of what Terraform is, and introduce basic lessons of Terraform usage from Data Engineering Zoomcamp.
+
+**Terraform** is Infrastructure as Code (IaC) tool to allow us manage cloud resource with code which is consider as a best practice by keep our code versioned in version control. 
+
+## 6b.2 Terraform Modules and Outputs Variables
+
+Modules are used to create reusable components for Terraform which is very useful to avoid code duplication for multiple environments such as staging and production. 
 
 *In-progress . . .*
