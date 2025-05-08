@@ -1364,6 +1364,8 @@ You're required to do a couple things to allow a python notebook to use poetry v
 
 *Note2*: if there's no option to choose for poetry virtual environment, try `Ctrl + Shift + P` or `Command + Shift + P` and select `Developer: Reload Window`, then try again.
 
+*Note3*: In order to remove poetry virtual env (`poetry env remove --all`), it requires to close the python notebook that's activating the venv and let python interpreter to use other python executable before trying to deleting poetry venv again. 
+
 **Reference:**
 - [Basic usage - Poetry Official](https://python-poetry.org/docs/basic-usage/)
 - [Python Poetry - Datacamp (for more detail on commands)](https://www.datacamp.com/tutorial/python-poetry)
