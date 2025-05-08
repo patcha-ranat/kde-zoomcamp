@@ -1199,7 +1199,7 @@ pip uninstall poetry
 export VENV_PATH="/c/Users/<your-pc-username>/.poetry-env/Scripts"
 
 # 2. add new isolated venv to $PATH *temporarily* to be executable for the current session
-export PATH="/c/Users/<your-pc-username>/.poetry-env/Scripts:$PATH"
+export PATH="$VENV_PATH:$PATH"
 
 # 3. create venv for poetry
 $VENV_PATH/python -m pip install -U pip setuptools
@@ -1230,13 +1230,13 @@ Below Basic usage refer to this [official documentation](https://python-poetry.o
 poetry new project_name
 ```
 
-- Initiating from existing project
+- Initiating from existing project (creating `pyproject.toml`)
 
 ```bash
 poetry init
 ```
 
-- Install project dependencies to virtual environment
+- Install project dependencies to virtual environment (created a new one if not activated and detected)
 ```bash
 poetry install
 ```
@@ -1262,6 +1262,10 @@ poetry run python your_script.py
 which python
 poetry run which python
 ```
+
+Please, note that one can specify which python version to use in a poetry environment for a project by specifying in `pyproject.toml` with `[project]` table and `requires-python` attribute.
+
+But specified python version must be installed in a host machine (local machine or in docker image).
 
 - Deleting `poetry.lock` file and running install again, resulting in updated all dependencies to their latest version.
 ```bash
@@ -1342,11 +1346,23 @@ poetry publish
 5. Regularly use `poetry update`, but test after updating
 6. Use group to separate dependencies for specific usecases and document it using comment
 7. `poetry check` to validate `pyproject.toml` syntax
-8. `poetry export` to create `requirements.txt` when needed
-9. Keep production dependencies minimal by specifying optional dependencies
-10. Test package installation in a clean environment before publishing 
-11. Maintain a clear `CHANGELOG.md`
-12. Use `poetry run` to ensure correct environment usage
+8. Keep production dependencies minimal by specifying optional dependencies
+9. Test package installation in a clean environment before publishing 
+10. Maintain a clear `CHANGELOG.md`
+11. Use `poetry run` to ensure correct environment usage
+
+**Jupyter Notebook & Poetry**
+
+You're required to do a couple things to allow a python notebook to use poetry virtual environment:
+1. Make sure your poetry is executable.
+2. Create poetry virtual environment for a project by `poetry install` command (use tag `--with` if needed).
+3. Get the virtual environment path created by poetry with `poetry env info --path`
+4. In vscode, `Ctrl + Shift + P` or `Command + Shift + P`, select python interpreter and enter the virtualenv path from the previous step.
+5. Open python notebook, select kernel, and select Poetry virtual environment.
+
+*Note1*: make sure to add `ipykernel` dependency to `pyproject.toml`
+
+*Note2*: if there's no option to choose for poetry virtual environment, try `Ctrl + Shift + P` or `Command + Shift + P` and select `Developer: Reload Window`, then try again.
 
 **Reference:**
 - [Basic usage - Poetry Official](https://python-poetry.org/docs/basic-usage/)
