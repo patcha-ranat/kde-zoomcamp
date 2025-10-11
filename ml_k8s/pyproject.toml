@@ -1,0 +1,14 @@
+[project]
+name = "ml-k8s"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.118.3",
+    "keras-image-helper>=0.0.2",
+    "numpy>=2.3.3",
+    "onnxruntime>=1.23.1",
+    "requests>=2.32.5",
+    "uvicorn>=0.37.0",
+]

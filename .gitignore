@@ -19,7 +19,8 @@ logs
 plugins
 config
 
-
 # local database
 mlflow.db
 
+# ml model
+*.onnx
